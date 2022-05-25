@@ -1,53 +1,155 @@
 <template lang='pug'>
 .container
-  button.btn-back
+  router-link.btn-back(
+    to='/'
+  )
     i.fa-solid.fa-arrow-left
     |  Back to Homepage
-  #country-name
-    .title
-      h1 Indonesia
-      img(
-        src='https://flagcdn.com/w320/id.png'
-      )
-    .another-name
-      p ID
-      p Republic of Indonesia
-      p Republik Indonesia
-  #location
-    .left-content
-      .display-box
-        .left-box
-          p.title LatLong
-          p.location -5.0, 120.0
-        .right-box
-          img(
-            src='@/assets/globe.svg'
-          )
-    .right-content
-      .display-box
-        p.capital Capital: Jakarta
-        p.region Region: Asia
-        p.subregion Subregion: South-Eastern Asia
-  #more-information
-    .left-content
-      .call-code
-        p.title Calling Code
-        p.number 62
-        p.more-information
-          span 1 country
-          |  with this calling code
-    .right-content
-      .currency
-        p.title Currency
-        p.currency-type IDR
-        p.more-information
-          span 1 country
-          |  with this currency
+  .content(
+    v-if='!dataDetail.isLoading'
+  )
+    #country-name
+      .title
+        h1 {{dataDetail.data.name.common}}
+        img(
+          :src='dataDetail.data.flags.png'
+        )
+      .another-name
+        p(
+          v-for='(value, key) in dataDetail.data.altSpellings'
+          :key='key'
+        ) {{value}}
+    #location
+      .left-content
+        .display-box
+          .left-box
+            p.title LatLong
+            p.location {{ latlngHelper(dataDetail.data.latlng[0]) }}, {{ latlngHelper(dataDetail.data.latlng[1]) }}
+          .right-box
+            img(
+              src='@/assets/globe.svg'
+            )
+      .right-content
+        .display-box
+          p.capital Capital: {{ dataDetail.data.capital[0] }}
+          p.region Region: {{ dataDetail.data.region }}
+          p.subregion Subregion: {{ dataDetail.data.subregion }}
+    #more-information
+      .left-content
+        .call-code
+          p.title Calling Code
+          p.number {{ numberTelHelper(dataDetail.data.idd.root) + dataDetail.data.idd.suffixes[0] }}
+          p.more-information
+            span(
+              :title='sameNumTel(callingCode)'
+            ) {{ callingCode.length }} country
+            |  with this calling code
+      .right-content
+        .currency
+          p.title Currency
+          p.currency-type {{ Object.keys(dataDetail.data.currencies).toString() }}
+          p.more-information
+            span(
+              :title='filterCurrency(sameCurrency)'
+            ) {{ sameCurrency.length }} country
+            |  with this currency
+  .loading(
+    v-else
+  )
+    p Loading
 </template>
 
 <script>
+import router from '@/router'
+import axios from 'axios'
+import { ref } from '@vue/reactivity'
+import { watch } from '@vue/runtime-core'
 export default {
   setup () {
+    const params = router.currentRoute.value.params.name
+    const dataDetail = ref({
+      isLoading: true,
+      isError: false,
+      data: {}
+    })
+    const callingCode = ref([])
+    const sameCurrency = ref([])
+
+    dataDetail.value.isLoading = true
+    dataDetail.value.isError = false
+    dataDetail.value.data = {}
+
+    axios.get(`https://restcountries.com/v3.1/name/${params}`)
+      .then(response => {
+        dataDetail.value.isLoading = false
+        dataDetail.value.data = { ...response.data[0] }
+      })
+      .catch(() => {
+        dataDetail.value.isLoading = false
+        dataDetail.value.isError = true
+      })
+
+    const latlngHelper = (val) => {
+      return val + '.0'
+    }
+
+    const numberTelHelper = (val) => {
+      return val.replace(/\+/g, '')
+    }
+
+    const sameNumTel = (val) => {
+      let holder = ''
+      val.forEach(item => {
+        holder += `${item.name}\n`
+      })
+      return holder
+    }
+
+    const filterCurrency = (val) => {
+      let holder = ''
+      val.forEach(item => {
+        holder += `${item.name}\n`
+      })
+      return holder
+    }
+
+    watch(() => dataDetail.value.data,
+      (newData) => {
+        const data = JSON.parse(JSON.stringify(newData))
+        const number = `${numberTelHelper(data.idd.root)}${data.idd.suffixes[0]}`
+        axios.get(`https://restcountries.com/v2/callingcode/${number}`)
+          .then(response => {
+            callingCode.value = response.data.map(val => {
+              return { name: val.name }
+            })
+          })
+          .catch(err => console.log(err))
+      }
+    )
+
+    watch(() => dataDetail.value.data,
+      (newData) => {
+        const data = JSON.parse(JSON.stringify(newData))
+        const currency = Object.keys(data.currencies).toString()
+        axios.get(`https://restcountries.com/v3.1/currency/${currency}`)
+          .then(response => {
+            sameCurrency.value = response.data.map(val => {
+              return { name: val.name.common }
+            })
+          })
+          .catch(err => console.log(err))
+      }
+    )
+
+    return {
+      dataDetail,
+      latlngHelper,
+      numberTelHelper,
+      callingCode,
+      sameNumTel,
+      sameCurrency,
+      filterCurrency
+    }
   }
 }
 </script>
@@ -65,166 +167,174 @@ export default {
     border-radius: 10px;
     background-color: #8362F2;
     font-size: 18px;
+    padding: 10px;
+    text-decoration: none;
   }
 
-  #country-name {
+  .content #country-name {
     margin-top: 50px;
   }
 
-  #country-name .title {
+  .content #country-name .title {
     display: flex;
     align-items: center;
   }
 
-  #country-name .title h1 {
+  .content #country-name .title h1 {
     font-size: 48px;
   }
 
-  #country-name .title img {
+  .content #country-name .title img {
     width: 46px;
     height: 30px;
     margin-left: 20px;
   }
 
-  #country-name .another-name {
+  .content #country-name .another-name {
     font-size: 12px;
     display: flex;
     color: #fff;
   }
 
-  #country-name .another-name p {
+  .content #country-name .another-name p {
     background: #8DD4CC;
     margin: 5px 5px 5px 0;
     padding: 5px 10px;
     border-radius: 50px;
   }
 
-  #location {
+  .content #location {
     display: flex;
   }
 
-  #location .left-content {
+  .content #location .left-content {
     padding: 10px;
     width: 50%;
     height: 145px;
   }
 
-  #location .left-content  .display-box {
+  .content #location .left-content  .display-box {
     display: flex;
     overflow: hidden;
   }
 
-  #location .left-content  .display-box .left-box {
+  .content #location .left-content  .display-box .left-box {
     width: 60%;
     height: 100%;
     padding: 20px;
+    overflow: auto;
   }
 
-  #location .left-content  .display-box .left-box .title {
+  .content #location .left-content  .display-box .left-box .title {
     font-size: 18px;
   }
 
-  #location .left-content  .display-box .left-box .location {
+  .content #location .left-content  .display-box .left-box .location {
     font-size: 48px;
     margin: 10px 0;
     color: #8362F2;
     font-weight: 700;
   }
 
-  #location .left-content  .display-box .right-box {
+  .content #location .left-content  .display-box .right-box {
     width: 40%;
     height: 100%;
     display: flex;
     justify-content: flex-end;
   }
 
-  #location .left-content  .display-box .right-box img {
+  .content #location .left-content  .display-box .right-box img {
     margin-top: 15px;
     width: 204px;
     height: 204px;
   }
 
-  #location .right-content {
+  .content #location .right-content {
     padding: 10px;
     width: 50%;
     height: 145px;
   }
 
-  #location .right-content .display-box {
+  .content #location .right-content .display-box {
     font-size: 18px;
     padding: 20px;
     line-height: 25px;
   }
 
-  #location .left-content .display-box,
-  #location .right-content .display-box {
+  .content #location .left-content .display-box,
+  .content #location .right-content .display-box {
     height: 100%;
     box-shadow: -4px -4px 4px rgba(0, 0, 0, 0.02), 4px 4px 4px rgba(0, 0, 0, 0.02);
   }
 
-  #more-information {
+  .content #more-information {
     display: flex;
   }
 
-  #more-information .left-content {
+  .content #more-information .left-content {
     padding: 10px;
     width: 50%;
     height: 145px;
   }
 
-  #more-information .left-content .call-code {
+  .content #more-information .left-content .call-code {
     padding: 10px
   }
 
-  #more-information .left-content .call-code .title {
+  .content #more-information .left-content .call-code .title {
     font-size: 18px;
   }
 
-  #more-information .left-content .call-code .number {
+  .content #more-information .left-content .call-code .number {
     margin: 10px 0;
     color: #8362F2;
     font-size: 48px;
     font-weight: 700;
   }
 
-  #more-information .left-content .call-code .more-information {
+  .content #more-information .left-content .call-code .more-information {
     font-size: 14px;
   }
 
-  #more-information .left-content .call-code .more-information>span {
+  .content #more-information .left-content .call-code .more-information>span {
     color: #8362F2;
     text-decoration: underline;
     cursor: pointer;
   }
 
-  #more-information .right-content {
+  .content #more-information .right-content {
     padding: 10px;
     width: 50%;
     height: 145px;
   }
 
-  #more-information .right-content .currency {
+  .content #more-information .right-content .currency {
     padding: 10px
   }
 
-  #more-information .right-content .currency .title {
+  .content #more-information .right-content .currency .title {
     font-size: 18px;
   }
 
-  #more-information .right-content .currency .currency-type {
+  .content #more-information .right-content .currency .currency-type {
     margin: 10px 0;
     color: #8362F2;
     font-size: 48px;
     font-weight: 700;
   }
 
-  #more-information .right-content .currency .more-information {
+  .content #more-information .right-content .currency .more-information {
     font-size: 14px;
   }
 
-  #more-information .right-content .currency .more-information>span {
+  .content #more-information .right-content .currency .more-information>span {
     color: #8362F2;
     text-decoration: underline;
     cursor: pointer;
+  }
+
+  .loading {
+    display: flex;
+    justify-content: center;
   }
 </style>

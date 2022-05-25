@@ -13,43 +13,84 @@
     #search-bar-recommendation(
       v-if='inputValue !== ""'
     )
-      .recommendation(
-        v-if='countryList.length > 0'
-        v-for='(value, key) in countryList'
+      .display(
+        v-if='!countryList.isLoading'
+
       )
-        .country-name(
-          :key='key'
+        .not-found(
+          v-if='countryList.isError'
         )
-          p {{ value.name.common }}
-      .not-found(
-        v-else
+          p Data not found
+        .recommendation(
+          v-else
+          v-for='(value, key) in countryList.data'
+        )
+          .country-name(
+            :key='key'
+            @click='detailCountry(value.name.common)'
+          )
+            p {{ value.name.common }}
+      .loading(
+        v-else-if='countryList.isLoading'
       )
-        p Data not found
+        p Loading
 </template>
 
 <script>
 import axios from 'axios'
 import { ref } from 'vue'
+import router from '@/router'
+import { watch } from '@vue/runtime-core'
 
 export default {
   setup () {
     const inputValue = ref('')
-    const countryList = ref([])
+    const countryList = ref({
+      isLoading: true,
+      isError: false,
+      data: []
+    })
 
     const changeHandle = () => {
+      // set default
+      countryList.value.data = []
+      countryList.value.isLoading = true
+      countryList.value.isError = false
+
       axios.get(`https://restcountries.com/v3.1/name/${inputValue.value}`)
         .then(response => {
-          for (let i = 0; i < 5; i++) {
-            countryList.value.push(response.data[i])
-          }
+          // set to be done
+          countryList.value.data = response.data
+          countryList.value.isError = false
+          countryList.value.isLoading = false
         })
-        .catch(err => console.log(err))
+        .catch(() => {
+          // set if was error
+          countryList.value.isLoading = false
+          countryList.value.isError = true
+        })
+    }
+
+    watch(() => countryList.value.data,
+      (newData) => {
+        if (newData.length > 5) {
+          const data = JSON.parse(JSON.stringify(newData))
+          countryList.value.data = data.slice(0, 5)
+        } else {
+          countryList.value.data = newData
+        }
+      }
+    )
+
+    const detailCountry = (name) => {
+      router.push(`/detail/${name}`)
     }
 
     return {
       countryList,
       inputValue,
-      changeHandle
+      changeHandle,
+      detailCountry
     }
   }
 }
@@ -111,21 +152,21 @@ export default {
     max-height: 150px;
     overflow: auto;
     background: #FFFFFF;
-    box-shadow: -4px -4px 4px rgba(0, 0, 0, 0.5), 4px 4px 4px rgba(0, 0, 0, 0.5);
+    box-shadow: -4px -4px 4px rgba(0, 0, 0, 0.02), 4px 4px 4px rgba(0, 0, 0, 0.02);
     border-radius: 5px;
     padding: 20px 0;
   }
 
-  .content #search-bar-recommendation .recommendation {
+  .content #search-bar-recommendation .display .recommendation {
     padding: 10px 30px;
   }
 
-  .content #search-bar-recommendation .recommendation:hover {
+  .content #search-bar-recommendation .display .recommendation:hover {
     background-color: #F4F4F4;
     cursor: pointer;
   }
 
-  .content #search-bar-recommendation .not-found {
+  .content #search-bar-recommendation .display .not-found {
     color: #FF0000;
     padding: 10px 30px;
   }
